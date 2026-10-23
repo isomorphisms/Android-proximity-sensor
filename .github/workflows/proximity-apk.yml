@@ -1,0 +1,68 @@
+name: Proximity native APKs
+
+on:
+  push:
+    branches: [main, 'feature/**']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  host-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Test proximity classification and transition history
+        run: |
+          cc -std=c17 -Wall -Wextra -Werror -pedantic -I. tests/model_test.c -lm -o /tmp/proximity-model-test
+          /tmp/proximity-model-test
+
+  build:
+    needs: host-tests
+    runs-on: ubuntu-24.04
+    env:
+      ANDROID_KEYSTORE: ${{ github.workspace }}/.test-signing/_/build/app/wegert-debug.keystore
+      ANDROID_KEYSTORE_PASSWORD: wegert-debug
+      ANDROID_KEY_PASSWORD: wegert-debug
+      ANDROID_KEY_ALIAS: wegert-debug
+      ANDROID_EXPECTED_CERT_SHA256: de9b1d47c5a65e6d46a204b79dd9ee566b9d3c9832ba81ebc4213d3392e92ff9
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Obtain pinned public development signer
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: isomorphismes/wegert
+          ref: 89dcfb840cec1a66ee04c7f7404954cbd6c09839
+          path: .test-signing
+          sparse-checkout: _/build/app/wegert-debug.keystore
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
+        with:
+          packages: platform-tools
+      - name: Install SDK and NDK
+        run: |
+          yes | sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;27.2.12479018'
+      - name: Build and verify C67 and A1 APKs
+        run: |
+          sh build-apk.sh
+          test -s dist/proximity-c67-arm64-v8a.apk
+          test -s dist/proximity-a1-armeabi-v7a.apk
+          (cd dist && sha256sum -c SHA256SUMS)
+          for apk in dist/*.apk; do
+            unzip -Z1 "$apk" | tee /tmp/proximity-contents
+            ! grep -qx classes.dex /tmp/proximity-contents
+            "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify "$apk"
+          done
+      - name: Retain signed device-specific APKs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: proximity-native-apks
+          path: |
+            dist/*.apk
+            dist/SHA256SUMS
+          if-no-files-found: error
