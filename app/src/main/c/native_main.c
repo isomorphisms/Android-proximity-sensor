@@ -1,3 +1,4 @@
+#include <jni.h>
 #include <android/looper.h>
 #include <android/log.h>
 #include <android/native_window.h>
@@ -260,9 +261,54 @@ static void read_events(struct proximity_app *s)
     if (redrawn) render(s);
 }
 
+/*
+ * Android NDK exposes proximity samples but not ASensor_getMaxRange().
+ * Read only this one metadata number through the system Sensor object.
+ * The application has no Java/Kotlin source, and all event acquisition
+ * remains in the NDK.
+ */
+static float android_maximum_range(struct android_app *app)
+{
+    JNIEnv *env = NULL;
+    JavaVM *vm = app->activity->vm;
+    if ((*vm)->AttachCurrentThread(vm, &env, NULL) != JNI_OK) return 0.0f;
+
+    float range = 0.0f;
+    jclass activity_class = (*env)->GetObjectClass(env, app->activity->clazz);
+    jmethodID get_service = activity_class ?
+        (*env)->GetMethodID(env, activity_class, "getSystemService",
+                            "(Ljava/lang/String;)Ljava/lang/Object;") : NULL;
+    jstring sensor_service = get_service ? (*env)->NewStringUTF(env, "sensor") : NULL;
+    jobject service = sensor_service ?
+        (*env)->CallObjectMethod(env, app->activity->clazz, get_service, sensor_service) : NULL;
+    jclass manager_class = service ? (*env)->GetObjectClass(env, service) : NULL;
+    jmethodID get_sensor = manager_class ?
+        (*env)->GetMethodID(env, manager_class, "getDefaultSensor",
+                            "(I)Landroid/hardware/Sensor;") : NULL;
+    jobject sensor_object = get_sensor ?
+        (*env)->CallObjectMethod(env, service, get_sensor, (jint)ASENSOR_TYPE_PROXIMITY) : NULL;
+    jclass sensor_class = sensor_object ? (*env)->GetObjectClass(env, sensor_object) : NULL;
+    jmethodID get_maximum = sensor_class ?
+        (*env)->GetMethodID(env, sensor_class, "getMaximumRange", "()F") : NULL;
+    if (get_maximum) {
+        range = (*env)->CallFloatMethod(env, sensor_object, get_maximum);
+    }
+    if ((*env)->ExceptionCheck(env)) {
+        (*env)->ExceptionClear(env);
+        range = 0.0f;
+    }
+    if (sensor_class) (*env)->DeleteLocalRef(env, sensor_class);
+    if (sensor_object) (*env)->DeleteLocalRef(env, sensor_object);
+    if (manager_class) (*env)->DeleteLocalRef(env, manager_class);
+    if (service) (*env)->DeleteLocalRef(env, service);
+    if (sensor_service) (*env)->DeleteLocalRef(env, sensor_service);
+    if (activity_class) (*env)->DeleteLocalRef(env, activity_class);
+    (*vm)->DetachCurrentThread(vm);
+    return range;
+}
+
 void android_main(struct android_app *app)
 {
-    app_dummy();
     struct proximity_app s = {0};
     s.app = app;
     app->userData = &s;
@@ -276,7 +322,7 @@ void android_main(struct android_app *app)
             if (!s.queue) s.read_error = true;
         }
     }
-    proximity_model_initialize(&s.model, s.sensor ? ASensor_getMaxRange(s.sensor) : 0.0f);
+    proximity_model_initialize(&s.model, s.sensor ? android_maximum_range(app) : 0.0f);
     for (;;) {
         int events;
         struct android_poll_source *source = NULL;
