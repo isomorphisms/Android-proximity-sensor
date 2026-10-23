@@ -61,7 +61,6 @@ const char *android_proximity_name(const struct android_proximity *source);
 const char *android_proximity_vendor(const struct android_proximity *source);
 int android_proximity_type(const struct android_proximity *source);
 float android_proximity_resolution(const struct android_proximity *source);
-float android_proximity_maximum_range_cm(const struct android_proximity *source);
 int android_proximity_minimum_delay_us(const struct android_proximity *source);
 
 const char *android_proximity_status_text(enum android_proximity_status status);

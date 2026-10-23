@@ -157,11 +157,6 @@ float android_proximity_resolution(const struct android_proximity *source)
     return source->sensor == NULL ? 0.0F : ASensor_getResolution(source->sensor);
 }
 
-float android_proximity_maximum_range_cm(const struct android_proximity *source)
-{
-    return source->sensor == NULL ? 0.0F : ASensor_getMaxRange(source->sensor);
-}
-
 int android_proximity_minimum_delay_us(const struct android_proximity *source)
 {
     return source->sensor == NULL ? 0 : ASensor_getMinDelay(source->sensor);

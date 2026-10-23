@@ -443,7 +443,7 @@ static void draw_screen(struct proximity_state *state)
 
     bool available = android_proximity_is_available(&state->android_sensor);
     const char *status = !available ? "NO SENSOR" : proximity_state_name(&state->model);
-    uint32_t status_color = state->model.have_sample
+    uint32_t status_color = state->model.have_two_levels
         ? (state->model.near ? near_color : far_color)
         : primary;
     draw_centered(
@@ -466,11 +466,11 @@ static void draw_screen(struct proximity_state *state)
         &buffer, distance, (61 * buffer.height) / 100, value_scale, primary);
 
     draw_centered(
-        &buffer, "MAX RANGE", (73 * buffer.height) / 100, scale + 1, secondary);
+        &buffer, "SEEN HIGH", (73 * buffer.height) / 100, scale + 1, secondary);
     char maximum[64];
-    if (available) {
+    if (state->model.have_sample) {
         (void)snprintf(maximum, sizeof(maximum), "%.2f cm",
-                       (double)android_proximity_maximum_range_cm(&state->android_sensor));
+                       (double)state->model.maximum_observed_cm);
     } else {
         (void)snprintf(maximum, sizeof(maximum), "--");
     }
@@ -537,8 +537,7 @@ static void consume_sensor_events(struct proximity_state *state)
             break;
         }
         enum proximity_accept_result accepted = proximity_model_accept(
-            &state->model, reading.timestamp_ns, reading.distance_cm,
-            android_proximity_maximum_range_cm(&state->android_sensor));
+            &state->model, reading.timestamp_ns, reading.distance_cm);
         if (accepted != PROXIMITY_ACCEPTED) {
             __android_log_print(
                 ANDROID_LOG_WARN, LOG_TAG,
@@ -547,10 +546,10 @@ static void consume_sensor_events(struct proximity_state *state)
         }
         __android_log_print(
             ANDROID_LOG_INFO, LOG_TAG,
-            "timestamp_ns=%lld distance_cm=%.6g max_cm=%.6g state=%s transitions=%llu",
+            "timestamp_ns=%lld distance_cm=%.6g observed_high_cm=%.6g state=%s transitions=%llu",
             (long long)state->model.timestamp_ns,
             (double)state->model.distance_cm,
-            (double)state->model.maximum_cm,
+            (double)state->model.maximum_observed_cm,
             proximity_state_name(&state->model),
             (unsigned long long)state->model.transition_count);
     }

@@ -67,8 +67,7 @@ static int write_info(const struct android_proximity *sensor)
     (void)printf("vendor\t%s\n", vendor == NULL ? "unknown" : vendor);
     (void)printf("type\t%d\n", android_proximity_type(sensor));
     (void)printf("units\tcm\n");
-    (void)printf("maximum_range_cm\t%.9g\n",
-                 (double)android_proximity_maximum_range_cm(sensor));
+    (void)printf("maximum_range_cm\tunavailable_in_NDK\n");
     (void)printf("resolution_cm\t%.9g\n",
                  (double)android_proximity_resolution(sensor));
     (void)printf("minimum_delay_us\t%d\n",
@@ -83,7 +82,12 @@ static void write_inspection(
     (void)printf("record.index\t%ld\n", index);
     (void)printf("android.timestamp_ns\t%" PRId64 "\n", model->timestamp_ns);
     (void)printf("android.distance_cm\t%.9g\n", (double)model->distance_cm);
-    (void)printf("sensor.maximum_range_cm\t%.9g\n", (double)model->maximum_cm);
+    (void)printf("inferred.minimum_observed_cm\t%.9g\n",
+                 (double)model->minimum_observed_cm);
+    (void)printf("inferred.maximum_observed_cm\t%.9g\n",
+                 (double)model->maximum_observed_cm);
+    (void)printf("inferred.has_two_levels\t%s\n",
+                 model->have_two_levels ? "true" : "false");
     (void)printf("state\t%s\n", proximity_state_name(model));
     (void)printf("events\t%" PRIu64 "\n", model->event_count);
     (void)printf("transitions\t%" PRIu64 "\n", model->transition_count);
@@ -134,8 +138,7 @@ static int stream(
                 goto end;
             }
             enum proximity_accept_result accepted = proximity_model_accept(
-                &model, reading.timestamp_ns, reading.distance_cm,
-                android_proximity_maximum_range_cm(source));
+                &model, reading.timestamp_ns, reading.distance_cm);
             if (accepted != PROXIMITY_ACCEPTED) {
                 (void)fprintf(stderr, "invalid proximity event: %d\n", (int)accepted);
                 continue;

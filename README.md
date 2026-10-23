@@ -6,8 +6,10 @@ project. This is a standalone repository, not a new Java/Kotlin/Gradle applicati
 
 ## What it does
 
-- Displays live **NEAR** or **FAR** and Android's reported proximity distance
-  in centimeters, together with the sensor's declared maximum range.
+- Displays Android's reported distance in centimeters. Once two distinct
+  levels have been observed, it estimates **NEAR** / **FAR** and shows the
+  highest observed distance; it does not claim that number is the sensor's
+  declared maximum range.
 - Counts Android sensor events and logs raw distance, timestamp, and state to
   Android logcat under the tag `Proximity`.
 - Retains the Accelerometer's DEX-free `android.app.NativeActivity`,
@@ -19,14 +21,13 @@ project. This is a standalone repository, not a new Java/Kotlin/Gradle applicati
 The sensor type is Android `ASENSOR_TYPE_PROXIMITY` (8). Unlike the three-axis
 accelerometer, this is an **on-change**, single-value sensor. A typical binary
 proximity sensor reports 0 when covered and the maximum range when uncovered.
-We classify values **below** the sensor's advertised maximum as NEAR and
-values at or above the maximum as FAR. On devices with continuously varying
-proximity readings, the Android distance is shown without inventing accuracy.
-
-For example, a reported maximum of 5 cm means the displayed reading of
-`5.00 cm` normally means **farther than the sensing threshold**, *not* that an
-object is exactly five centimeters away. The distance comes through Android's
-sensor stack, not from sensor chip registers.
+The Android NDK's public SensorManager API does **not** expose
+`Sensor.getMaximumRange()`, so this native-only app must not invent that value.
+Initially it displays WAIT while learning observed levels. After covering and
+uncovering the sensor produces two distinct readings, the lower values are
+tentatively NEAR and the highest observed value is FAR. That follows the usual
+binary sensor convention, but for a continuously varying sensor it is only a
+relative estimate. The live numeric value remains the actual Android reading.
 
 No special Android permission is needed. The app listens while foregrounded
 and unregisters on pause/loss of focus. A wake-up sensor does **not** mean this
@@ -113,7 +114,7 @@ something moves across the sensor.
 The host tests prove only classification and retained-state behavior.
 For each APK and device, record SHA-256, ABI, signer, installation, app launch,
 observed near/far changes on covering the earpiece sensor, reported distance and
-maximum range, and logcat timestamps. Confirm the screen changes back to FAR
+observed high level, and logcat timestamps. Confirm the screen changes back to FAR
 when uncovered. A wake-up flag in `dumpsys sensorservice` is *not* evidence that
 the app is monitoring while suspended.
 
