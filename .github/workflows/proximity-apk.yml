@@ -17,6 +17,8 @@ jobs:
   packages:
     needs: model
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     env:
       ANDROID_KEYSTORE: ${{ github.workspace }}/.test-signing/_/build/app/wegert-debug.keystore
       ANDROID_KEYSTORE_PASSWORD: wegert-debug
@@ -110,3 +112,40 @@ jobs:
           name: proximity-android-bundle
           path: app/build/outputs/bundle/distribution/proximity.aab
           if-no-files-found: error
+      - name: Publish directly installable APKs
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'release:')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          distribution="$GITHUB_WORKSPACE/app/build/outputs/apk/distribution"
+          bundle="$GITHUB_WORKSPACE/app/build/outputs/bundle/distribution/proximity.aab"
+          (
+            cd "$distribution"
+            sha256sum proximity-armeabi-v7a.apk proximity-arm64-v8a.apk \
+              proximity-x86_64.apk proximity-universal.apk > SHA256SUMS
+          )
+          short_sha=$(printf '%s' "$GITHUB_SHA" | cut -c1-12)
+          tag="proximity-native-$short_sha"
+          notes="$RUNNER_TEMP/proximity-release-notes.md"
+          {
+            printf '%s\n' 'Standalone native Android proximity-sensor instrument.'
+            printf '\n%s\n' 'For the MIRO C67 use proximity-arm64-v8a.apk.'
+            printf '%s\n' 'For the MIRO A1 use proximity-armeabi-v7a.apk.'
+            printf '\n%s\n' 'These are CI-built, test-signed APKs, not a store release.'
+            printf '%s\n' 'NEAR/FAR is inferred only after two distinct readings; the NDK cannot supply the declared maximum range.'
+            printf '%s\n' 'Physical C67/A1 device acceptance is not yet established.'
+            printf '\nSource commit: %s\n' "$GITHUB_SHA"
+          } > "$notes"
+          gh release create "$tag" \
+            --target "$GITHUB_SHA" \
+            --title "Proximity native 0.1.0 ($short_sha)" \
+            --notes-file "$notes" \
+            --latest \
+            "$distribution/proximity-arm64-v8a.apk" \
+            "$distribution/proximity-armeabi-v7a.apk" \
+            "$distribution/proximity-x86_64.apk" \
+            "$distribution/proximity-universal.apk" \
+            "$distribution/SHA256SUMS" \
+            "$bundle"
+          gh release view "$tag" --json url,assets
