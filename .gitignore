@@ -1,0 +1,6 @@
+app/build/
+build/
+.test-signing/
+*.o
+*.so
+*.apk
