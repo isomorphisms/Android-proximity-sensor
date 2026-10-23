@@ -68,6 +68,7 @@ build_one() {
     mkdir -p "$WORK/$ABI/lib/$ABI"
     "$CC" "$@" -std=c17 -O2 -DNDEBUG -fPIC -fstack-protector-strong \
         -ffunction-sections -fdata-sections -Wall -Wextra -Werror -Wpedantic \
+        -Wno-strict-prototypes -Wno-deprecated-declarations -Wno-unused-parameter \
         -I"$ROOT" -I"$GLUE" \
         "$ROOT/app/src/main/c/native_main.c" \
         "$GLUE/android_native_app_glue.c" \
