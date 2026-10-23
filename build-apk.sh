@@ -48,13 +48,13 @@ compile_abi() {
 
     common="-std=c17 -O2 -g -fPIC -fstack-protector-strong -Wall -Wextra -Werror -Wpedantic -Wshadow"
     "$toolchain/bin/$compiler" $arm_flags $common \
-        -I"$project_dir/android" -I"$project_dir/model" -I"$glue_dir" \
+        -I"$project_dir/android" -I"$project_dir/model" -isystem "$glue_dir" \
         -c "$project_dir/app/src/main/c/native_main.c" -o "$abi_objects/native_main.o"
     "$toolchain/bin/$compiler" $arm_flags $common \
         -I"$project_dir/android" \
         -c "$project_dir/android/android_proximity.c" -o "$abi_objects/android_proximity.o"
     "$toolchain/bin/$compiler" $arm_flags -std=c17 -O2 -g -fPIC \
-        -I"$glue_dir" -c "$glue_dir/android_native_app_glue.c" \
+        -isystem "$glue_dir" -c "$glue_dir/android_native_app_glue.c" \
         -o "$abi_objects/android_native_app_glue.o"
 
     "$toolchain/bin/$compiler" $arm_flags -shared \
