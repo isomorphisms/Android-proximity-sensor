@@ -6,6 +6,8 @@
 #include "proximity_model.h"
 #include "android_proximity.h"
 
+#include "subpixel/font.h"
+
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -15,84 +17,11 @@
 
 #define LOG_TAG "Proximity"
 
-struct glyph {
-    char character;
-    uint8_t rows[7];
-};
-
-static const struct glyph glyphs[] = {
-    {' ', {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}},
-    {'+', {0x00, 0x04, 0x04, 0x1f, 0x04, 0x04, 0x00}},
-    {'-', {0x00, 0x00, 0x00, 0x1f, 0x00, 0x00, 0x00}},
-    {'.', {0x00, 0x00, 0x00, 0x00, 0x00, 0x0c, 0x0c}},
-    {'/', {0x01, 0x02, 0x02, 0x04, 0x08, 0x08, 0x10}},
-    {'0', {0x0e, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0e}},
-    {'1', {0x04, 0x0c, 0x14, 0x04, 0x04, 0x04, 0x1f}},
-    {'2', {0x0e, 0x11, 0x01, 0x02, 0x04, 0x08, 0x1f}},
-    {'3', {0x1e, 0x01, 0x01, 0x0e, 0x01, 0x01, 0x1e}},
-    {'4', {0x02, 0x06, 0x0a, 0x12, 0x1f, 0x02, 0x02}},
-    {'5', {0x1f, 0x10, 0x10, 0x1e, 0x01, 0x01, 0x1e}},
-    {'6', {0x0e, 0x10, 0x10, 0x1e, 0x11, 0x11, 0x0e}},
-    {'7', {0x1f, 0x01, 0x02, 0x04, 0x08, 0x08, 0x08}},
-    {'8', {0x0e, 0x11, 0x11, 0x0e, 0x11, 0x11, 0x0e}},
-    {'9', {0x0e, 0x11, 0x11, 0x0f, 0x01, 0x01, 0x0e}},
-    {'A', {0x0e, 0x11, 0x11, 0x1f, 0x11, 0x11, 0x11}},
-    {'C', {0x0f, 0x10, 0x10, 0x10, 0x10, 0x10, 0x0f}},
-    {'D', {0x1e, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1e}},
-    {'E', {0x1f, 0x10, 0x10, 0x1e, 0x10, 0x10, 0x1f}},
-    {'G', {0x0f, 0x10, 0x10, 0x17, 0x11, 0x11, 0x0f}},
-    {'H', {0x11, 0x11, 0x11, 0x1f, 0x11, 0x11, 0x11}},
-    {'I', {0x1f, 0x04, 0x04, 0x04, 0x04, 0x04, 0x1f}},
-    {'L', {0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x1f}},
-    {'M', {0x11, 0x1b, 0x15, 0x15, 0x11, 0x11, 0x11}},
-    {'a', {0x00, 0x00, 0x0e, 0x01, 0x0f, 0x11, 0x0f}},
-    {'d', {0x01, 0x01, 0x0f, 0x11, 0x11, 0x11, 0x0f}},
-    {'e', {0x00, 0x00, 0x0e, 0x11, 0x1f, 0x10, 0x0e}},
-    {'g', {0x00, 0x00, 0x0f, 0x11, 0x0f, 0x01, 0x0e}},
-    {'h', {0x10, 0x10, 0x1e, 0x11, 0x11, 0x11, 0x11}},
-    {'i', {0x04, 0x00, 0x0c, 0x04, 0x04, 0x04, 0x0e}},
-    {'m', {0x00, 0x00, 0x1a, 0x15, 0x15, 0x15, 0x15}},
-    {'n', {0x00, 0x00, 0x1e, 0x11, 0x11, 0x11, 0x11}},
-    {'o', {0x00, 0x00, 0x0e, 0x11, 0x11, 0x11, 0x0e}},
-    {'p', {0x00, 0x00, 0x1e, 0x11, 0x1e, 0x10, 0x10}},
-    {'r', {0x00, 0x00, 0x16, 0x19, 0x10, 0x10, 0x10}},
-    {'s', {0x00, 0x00, 0x0f, 0x10, 0x0e, 0x01, 0x1e}},
-    {'t', {0x04, 0x04, 0x1f, 0x04, 0x04, 0x04, 0x03}},
-    {'u', {0x00, 0x00, 0x11, 0x11, 0x11, 0x13, 0x0d}},
-    {'y', {0x00, 0x00, 0x11, 0x11, 0x0f, 0x01, 0x0e}},
-    {'N', {0x11, 0x19, 0x19, 0x15, 0x13, 0x13, 0x11}},
-    {'O', {0x0e, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0e}},
-    {'P', {0x1e, 0x11, 0x11, 0x1e, 0x10, 0x10, 0x10}},
-    {'R', {0x1e, 0x11, 0x11, 0x1e, 0x14, 0x12, 0x11}},
-    {'S', {0x0f, 0x10, 0x10, 0x0e, 0x01, 0x01, 0x1e}},
-    {'T', {0x1f, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04}},
-    {'U', {0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0e}},
-    {'X', {0x11, 0x11, 0x0a, 0x04, 0x0a, 0x11, 0x11}},
-    {'Y', {0x11, 0x11, 0x0a, 0x04, 0x04, 0x04, 0x04}},
-    {'Z', {0x1f, 0x01, 0x02, 0x04, 0x08, 0x10, 0x1f}},
-    {'F', {0x1f, 0x10, 0x10, 0x1e, 0x10, 0x10, 0x10}},
-    {'V', {0x11, 0x11, 0x11, 0x11, 0x0a, 0x0a, 0x04}},
-    {'W', {0x11, 0x11, 0x11, 0x15, 0x15, 0x15, 0x0a}},
-    {'c', {0x00, 0x00, 0x0f, 0x10, 0x10, 0x10, 0x0f}},
-    {'?', {0x0e, 0x11, 0x01, 0x02, 0x04, 0x00, 0x04}},
-};
-
 struct proximity_state {
     struct android_app *app;
     struct android_proximity android_sensor;
     struct proximity_model model;
 };
-
-static const uint8_t *glyph_rows(char character)
-{
-    size_t count = sizeof(glyphs) / sizeof(glyphs[0]);
-    for (size_t index = 0; index < count; ++index) {
-        if (glyphs[index].character == character) {
-            return glyphs[index].rows;
-        }
-    }
-    return glyphs[count - 1U].rows;
-}
 
 static void put_pixel(ANativeWindow_Buffer *buffer, int32_t x, int32_t y, uint32_t value)
 {
@@ -135,16 +64,6 @@ static void blend_pixel(
     pixels[offset] = mixed;
 }
 
-static bool glyph_cell_on(const uint8_t *rows, int32_t row, int32_t column)
-{
-    if (row < 0 || row >= 7 || column < 0 || column >= 5) {
-        return false;
-    }
-    uint8_t mask = (uint8_t)(1U << (unsigned int)(4 - column));
-    return (rows[row] & mask) != 0U;
-}
-
-#define GLYPH_SUPERSAMPLE 4
 #define GLYPH_CACHE_CAPACITY 96
 
 struct glyph_mask_cache_entry {
@@ -156,101 +75,17 @@ struct glyph_mask_cache_entry {
 static struct glyph_mask_cache_entry glyph_mask_cache[GLYPH_CACHE_CAPACITY];
 static size_t glyph_cache_replacement = 0U;
 
-static int32_t floor_divide(int32_t numerator, int32_t denominator)
-{
-    if (numerator >= 0) {
-        return numerator / denominator;
-    }
-    return -((-numerator + denominator - 1) / denominator);
-}
-
-/*
- * Reconstruct one continuous glyph from the 5x7 samples, then sample that
- * shape on a 4x4 grid inside each framebuffer pixel. The interpolation
- * threshold is exactly 2/5: low enough to bridge diagonal bitmap samples
- * such as X without turning the one-cell strokes into solid blocks.
- */
-static bool glyph_subsample_on(
-    const uint8_t *rows,
-    int32_t pixel_x,
-    int32_t pixel_y,
-    int32_t sub_x,
-    int32_t sub_y,
-    int32_t scale)
-{
-    int32_t denominator = 8 * scale;
-    int32_t x_numerator =
-        8 * pixel_x + 2 * sub_x + 1 - 4 * scale;
-    int32_t y_numerator =
-        8 * pixel_y + 2 * sub_y + 1 - 4 * scale;
-
-    int32_t column = floor_divide(x_numerator, denominator);
-    int32_t row = floor_divide(y_numerator, denominator);
-    int32_t x_remainder = x_numerator - column * denominator;
-    int32_t y_remainder = y_numerator - row * denominator;
-
-    int32_t x0_weight = denominator - x_remainder;
-    int32_t x1_weight = x_remainder;
-    int32_t y0_weight = denominator - y_remainder;
-    int32_t y1_weight = y_remainder;
-
-    int32_t weighted = 0;
-    if (glyph_cell_on(rows, row, column)) {
-        weighted += x0_weight * y0_weight;
-    }
-    if (glyph_cell_on(rows, row, column + 1)) {
-        weighted += x1_weight * y0_weight;
-    }
-    if (glyph_cell_on(rows, row + 1, column)) {
-        weighted += x0_weight * y1_weight;
-    }
-    if (glyph_cell_on(rows, row + 1, column + 1)) {
-        weighted += x1_weight * y1_weight;
-    }
-
-    int32_t full_weight = denominator * denominator;
-    return 5 * weighted >= 2 * full_weight;
-}
-
-static uint8_t glyph_pixel_coverage(
-    const uint8_t *rows,
-    int32_t pixel_x,
-    int32_t pixel_y,
-    int32_t scale)
-{
-    int32_t covered = 0;
-    for (int32_t sub_y = 0; sub_y < GLYPH_SUPERSAMPLE; ++sub_y) {
-        for (int32_t sub_x = 0; sub_x < GLYPH_SUPERSAMPLE; ++sub_x) {
-            if (glyph_subsample_on(
-                    rows,
-                    pixel_x,
-                    pixel_y,
-                    sub_x,
-                    sub_y,
-                    scale)) {
-                covered += 1;
-            }
-        }
-    }
-    return (uint8_t)((covered * 255 + 8) / 16);
-}
-
+/* The cache owns masks; all geometry and sampling belong to Subpixel. */
 static uint8_t *build_glyph_mask(char character, int32_t scale)
 {
-    int32_t width = 5 * scale;
-    int32_t height = 7 * scale;
-    size_t size = (size_t)width * (size_t)height;
+    if (scale < 1 || scale > 20) return NULL;
+    size_t size = 35U * (size_t)scale * (size_t)scale;
     uint8_t *coverage = (uint8_t *)malloc(size);
-    if (coverage == NULL) {
+    if (coverage == NULL) return NULL;
+    if (!sf57_render_coverage((unsigned char)character, (unsigned)scale,
+            0.0, 0.0, coverage, size)) {
+        free(coverage);
         return NULL;
-    }
-
-    const uint8_t *rows = glyph_rows(character);
-    for (int32_t y = 0; y < height; ++y) {
-        for (int32_t x = 0; x < width; ++x) {
-            coverage[(size_t)y * (size_t)width + (size_t)x] =
-                glyph_pixel_coverage(rows, x, y, scale);
-        }
     }
     return coverage;
 }
@@ -329,14 +164,11 @@ static void draw_glyph(
     int32_t width = 5 * scale;
     int32_t height = 7 * scale;
     const uint8_t *coverage = cached_glyph_mask(character, scale);
-    const uint8_t *rows = glyph_rows(character);
+    if (coverage == NULL) return;
 
     for (int32_t y = 0; y < height; ++y) {
         for (int32_t x = 0; x < width; ++x) {
-            uint8_t pixel_coverage =
-                coverage != NULL
-                    ? coverage[(size_t)y * (size_t)width + (size_t)x]
-                    : glyph_pixel_coverage(rows, x, y, scale);
+            uint8_t pixel_coverage = coverage[(size_t)y * (size_t)width + (size_t)x];
             if (pixel_coverage == 0U) {
                 continue;
             }
