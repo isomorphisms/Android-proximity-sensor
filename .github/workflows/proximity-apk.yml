@@ -1,0 +1,112 @@
+name: Proximity native packages
+
+on:
+  push:
+    branches: [main, feature/native-proximity]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  model:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Verify proximity model on host
+        run: sh tests/run-host.sh
+
+  packages:
+    needs: model
+    runs-on: ubuntu-24.04
+    env:
+      ANDROID_KEYSTORE: ${{ github.workspace }}/.test-signing/_/build/app/wegert-debug.keystore
+      ANDROID_KEYSTORE_PASSWORD: wegert-debug
+      ANDROID_KEY_PASSWORD: wegert-debug
+      ANDROID_KEY_ALIAS: wegert-debug
+      ANDROID_EXPECTED_CERT_SHA256: DE:9B:1D:47:C5:A6:5E:6D:46:A2:04:B7:9D:D9:EE:56:6B:9D:3C:98:32:BA:81:EB:C4:21:3D:33:92:E9:2F:F9
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Check out persistent public test signer
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: isomorphismes/wegert
+          ref: 89dcfb840cec1a66ee04c7f7404954cbd6c09839
+          path: .test-signing
+          sparse-checkout: _/build/app/wegert-debug.keystore
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
+        with:
+          packages: platform-tools
+      - name: Install SDK and NDK inputs
+        run: |
+          yes | sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;27.2.12479018'
+      - name: Build signed native APKs and command-line readers
+        run: sh build-apk.sh
+      - name: Inspect Android packages
+        run: |
+          set -eu
+          debug=app/build/outputs/apk/debug/app-debug.apk
+          distribution=app/build/outputs/apk/distribution
+          test -f "$debug"
+          if unzip -Z1 "$debug" | grep -q 'classes.dex'; then
+            echo 'DEX is forbidden in this NativeActivity build' >&2
+            exit 1
+          fi
+          for abi in armeabi-v7a arm64-v8a x86_64; do
+            apk="$distribution/proximity-$abi.apk"
+            test -f "$apk"
+            test -x "$distribution/proximity-$abi"
+            test "$(unzip -Z1 "$apk" | grep -Ec '^lib/[^/]+/libproximity[.]so$')" -eq 1
+            unzip -Z1 "$apk" | grep -qx "lib/$abi/libproximity.so"
+            ! unzip -Z1 "$apk" | grep -q 'classes.dex'
+            unzip -p "$apk" "lib/$abi/libproximity.so" >"/tmp/libproximity-$abi.so"
+            if readelf -S "/tmp/libproximity-$abi.so" | grep -q '[.]debug_'; then
+              echo "unstripped library in $apk" >&2
+              exit 1
+            fi
+          done
+          test "$(unzip -Z1 "$distribution/proximity-universal.apk" |
+            grep -Ec '^lib/[^/]+/libproximity[.]so$')" -eq 3
+          readelf -A /tmp/libproximity-armeabi-v7a.so | tee /tmp/proximity-arm-attributes.txt
+          grep -q 'Tag_THUMB_ISA_use: Thumb-2' /tmp/proximity-arm-attributes.txt
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$debug"
+
+      - name: Install optional bundle packaging tools
+        run: |
+          set -eu
+          tools="$RUNNER_TEMP/proximity-bundle-tools"
+          mkdir -p "$tools/aapt2"
+          curl -fL --retry 3 -o "$tools/bundletool.jar" \
+            'https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar'
+          echo 'a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29  '"$tools/bundletool.jar" | sha256sum -c -
+          curl -fL --retry 3 -o "$tools/aapt2.jar" \
+            'https://dl.google.com/dl/android/maven2/com/android/tools/build/aapt2/9.4.1-15978811/aapt2-9.4.1-15978811-linux.jar'
+          unzip -q "$tools/aapt2.jar" -d "$tools/aapt2"
+          chmod +x "$tools/aapt2/aapt2"
+          echo "BUNDLETOOL_JAR=$tools/bundletool.jar" >> "$GITHUB_ENV"
+          echo "BUNDLE_AAPT2=$tools/aapt2/aapt2" >> "$GITHUB_ENV"
+      - name: Build and validate signed Android App Bundle
+        run: sh build-bundle.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: proximity-native-apks
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/distribution/*.apk
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: proximity-command-line
+          path: |
+            app/build/outputs/apk/distribution/proximity-armeabi-v7a
+            app/build/outputs/apk/distribution/proximity-arm64-v8a
+            app/build/outputs/apk/distribution/proximity-x86_64
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: proximity-android-bundle
+          path: app/build/outputs/bundle/distribution/proximity.aab
+          if-no-files-found: error
