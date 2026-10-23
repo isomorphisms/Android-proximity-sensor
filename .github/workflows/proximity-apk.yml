@@ -7,15 +7,23 @@ on:
   workflow_dispatch:
 
 jobs:
+  compilers:
+    uses: Ashtray-Archer/utilities-android-phone-user/.github/workflows/ick-compilers.yml@b4587cf189587456b1026226be3195429c905735
+
   model:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Qualify owned host C producer
+        id: ick
+        uses: isomorphisms/ai-ci/ick-host@4ea071a96239f3a29ca6d98454feb59947d87cfe
       - name: Verify proximity model on host
-        run: sh tests/run-host.sh
+        run: ICK="${{ steps.ick.outputs.compiler }}" sh tests/run-host.sh
 
   packages:
-    needs: model
+    needs: [model, compilers]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -27,6 +35,8 @@ jobs:
       ANDROID_EXPECTED_CERT_SHA256: DE:9B:1D:47:C5:A6:5E:6D:46:A2:04:B7:9D:D9:EE:56:6B:9D:3C:98:32:BA:81:EB:C4:21:3D:33:92:E9:2F:F9
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Check out persistent public test signer
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -45,6 +55,35 @@ jobs:
       - name: Install SDK and NDK inputs
         run: |
           yes | sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;27.2.12479018'
+      - name: Check out shared build adapter
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: Ashtray-Archer/utilities-android-phone-user
+          ref: b4587cf189587456b1026226be3195429c905735
+          path: .utilities
+      - name: Check out canonical Subpixel font
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: isomorphisms/rough.framebuffer
+          ref: 83ea1bf4989a8857b9d70c9ae238aa9e0932bf0e
+          path: .subpixel
+      - name: Check out shared owned-C producer
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: isomorphisms/ai-ci
+          ref: 4ea071a96239f3a29ca6d98454feb59947d87cfe
+          path: .ai-ci-ick
+      - name: Download qualified ICK stages
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: ick-*
+          path: build/ick-packages
+          merge-multiple: true
+      - name: Restore ICK stages
+        run: |
+          make -f .ai-ci-ick/ick-android/Makefile restore-stage ABI=armeabi-v7a ICK_STAGE="$GITHUB_WORKSPACE/build/ick/armeabi-v7a" ICK_ARCHIVE="$GITHUB_WORKSPACE/build/ick-packages/ick-armeabi-v7a.tar.gz"
+          make -f .ai-ci-ick/ick-android/Makefile restore-stage ABI=arm64-v8a ICK_STAGE="$GITHUB_WORKSPACE/build/ick/arm64-v8a" ICK_ARCHIVE="$GITHUB_WORKSPACE/build/ick-packages/ick-arm64-v8a.tar.gz"
+          make -f .ai-ci-ick/ick-android/Makefile restore-stage ABI=x86_64 ICK_STAGE="$GITHUB_WORKSPACE/build/ick/x86_64" ICK_ARCHIVE="$GITHUB_WORKSPACE/build/ick-packages/ick-x86_64.tar.gz"
       - name: Build signed native APKs and command-line readers
         run: sh build-apk.sh
       - name: Inspect Android packages

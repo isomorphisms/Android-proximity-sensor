@@ -61,8 +61,8 @@ mkdir -p "$proto_dir" "$module_dir/manifest" "$module_dir/lib" "$output_dir"
     --manifest "$project_dir/app/src/main/AndroidManifest.xml" \
     --min-sdk-version 26 \
     --target-sdk-version 36 \
-    --version-code 1 \
-    --version-name 0.1.0 \
+    --version-code 2 \
+    --version-name 0.2.0 \
     -o "$proto_apk" \
     "$compiled_resources"
 

@@ -41,34 +41,18 @@ mkdir -p "$staging_dir" "$debug_output_dir" "$distribution_output_dir"
 
 compile_abi() {
     abi=$1
-    compiler=$2
-    arm_flags=$3
-    abi_objects="$work_dir/objects/$abi"
-    mkdir -p "$abi_objects" "$staging_dir/lib/$abi"
-
-    common="-std=c17 -O2 -g -fPIC -fstack-protector-strong -Wall -Wextra -Werror -Wpedantic -Wshadow"
-    "$toolchain/bin/$compiler" $arm_flags $common \
-        -I"$project_dir/android" -I"$project_dir/model" -isystem "$glue_dir" \
-        -c "$project_dir/app/src/main/c/native_main.c" -o "$abi_objects/native_main.o"
-    "$toolchain/bin/$compiler" $arm_flags $common \
-        -I"$project_dir/android" \
-        -c "$project_dir/android/android_proximity.c" -o "$abi_objects/android_proximity.o"
-    "$toolchain/bin/$compiler" $arm_flags -std=c17 -O2 -g -fPIC \
-        -isystem "$glue_dir" -c "$glue_dir/android_native_app_glue.c" \
-        -o "$abi_objects/android_native_app_glue.o"
-
-    "$toolchain/bin/$compiler" $arm_flags -shared \
-        -Wl,--no-undefined -Wl,--gc-sections -Wl,-z,relro,-z,now \
-        -Wl,-u,ANativeActivity_onCreate \
-        "$abi_objects/native_main.o" "$abi_objects/android_proximity.o" \
-        "$abi_objects/android_native_app_glue.o" -landroid -llog -lm \
-        -o "$staging_dir/lib/$abi/libproximity.so"
-
-    "$toolchain/bin/$compiler" $arm_flags -std=c17 -O2 -fPIE -pie \
-        -Wall -Wextra -Werror -Wpedantic -Wshadow \
-        -I"$project_dir/android" -I"$project_dir/model" \
-        "$project_dir/command/proximity.c" "$project_dir/android/android_proximity.c" \
-        -landroid -lm -o "$distribution_output_dir/proximity-$abi"
+    utilities_dir=${UTILITIES_ROOT:-$project_dir/.utilities}
+    test "$(git -C "$utilities_dir" rev-parse HEAD)" = "b4587cf189587456b1026226be3195429c905735"
+    make -f "$utilities_dir/icky/Android.mk" native \
+        PROFILE=accelerometer ROOT="$project_dir" ABI="$abi" NDK="$ndk_root" \
+        SOURCE_accelerometer="app/src/main/c/native_main.c android/android_proximity.c" \
+        INCLUDE_accelerometer="-I$project_dir/model -I$project_dir/android -I${SUBPIXEL_ROOT:-$project_dir/.subpixel}/subpixel/include" \
+        BUILD="$work_dir/objects/$abi" OUT="$staging_dir/lib/$abi/libproximity.so"
+    make -f "$utilities_dir/icky/Android.mk" native \
+        PROFILE=hardware ROOT="$project_dir" ABI="$abi" NDK="$ndk_root" API=26 \
+        SOURCE_hardware="command/proximity.c android/android_proximity.c" \
+        INCLUDE_hardware="-I$project_dir/model -I$project_dir/android -I$project_dir/command" \
+        BUILD="$work_dir/command/$abi" OUT="$distribution_output_dir/proximity-$abi"
 }
 
 compile_abi arm64-v8a aarch64-linux-android26-clang ""
@@ -87,8 +71,8 @@ compiled_resources="$work_dir/compiled-resources.zip"
     --manifest "$project_dir/app/src/main/AndroidManifest.xml" \
     --min-sdk-version 26 \
     --target-sdk-version 36 \
-    --version-code 1 \
-    --version-name 0.1.0 \
+    --version-code 2 \
+    --version-name 0.2.0 \
     -o "$base_apk" \
     "$compiled_resources"
 
