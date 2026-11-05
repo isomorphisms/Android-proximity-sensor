@@ -67,6 +67,15 @@ jobs:
           repository: isomorphisms/rough.framebuffer
           ref: 83ea1bf4989a8857b9d70c9ae238aa9e0932bf0e
           path: .subpixel
+      - name: Check out shared charcoal presentation
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: isomorphisms/android-NDK
+          ref: 3e682fb1175beef5625dbd2418730220e49fc9bd
+          path: .charcoal
+          persist-credentials: false
+      - name: Stage explicit charcoal launch and control resources
+        run: cp -R .charcoal/native/presentation/res/. app/src/main/res/
       - name: Check out shared owned-C producer
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:

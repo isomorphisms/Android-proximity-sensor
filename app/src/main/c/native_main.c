@@ -7,6 +7,7 @@
 #include "android_proximity.h"
 
 #include "subpixel/font.h"
+#include "../../../../../.charcoal/native/presentation/charcoal.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -256,12 +257,12 @@ static void draw_screen(struct proximity_state *state)
         return;
     }
 
-    const uint32_t background = 0xff181818U;
-    const uint32_t primary = 0xffeeeeeeU;
-    const uint32_t secondary = 0xffb0b0b0U;
+    const uint32_t background ← CHARCOAL_BACKGROUND;
+    const uint32_t primary ← CHARCOAL_TEXT;
+    const uint32_t secondary ← CHARCOAL_SECONDARY;
     const uint32_t near_color = 0xff40c0ffU;
     const uint32_t far_color = 0xff80d0a0U;
-    const uint32_t track = 0xff404040U;
+    const uint32_t track ← CHARCOAL_BORDER;
     clear_buffer(&buffer, background);
 
     int32_t scale = buffer.width / 170;
