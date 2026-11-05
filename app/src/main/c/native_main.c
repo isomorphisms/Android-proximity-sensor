@@ -7,7 +7,7 @@
 #include "android_proximity.h"
 
 #include "subpixel/font.h"
-#include "../../../../../.charcoal/native/presentation/charcoal.h"
+#include "../../../../.charcoal/native/presentation/charcoal.h"
 
 #include <stdbool.h>
 #include <stddef.h>
